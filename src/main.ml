@@ -20,6 +20,8 @@ let with_fd (i : int) ~f =
 let wait_for_result c ~fd =
   c#consume_input;
   while%bind return c#is_busy do
+    (* apparently there's an Async.Fd function that will call you back 
+    if there's reads available on the descriptor. *)
     let%map _a = Async.Fd.ready_to fd `Read in
     c#consume_input
   done
@@ -157,7 +159,7 @@ let test (c : connection) ~fd =
       (r#getvalue i 0)
       (r#getvalue i 1)
       (r#getvalue i 2)
-      ((r#get_escaped_value i 3))
+      (r#get_escaped_value i 3)
   done;
   printf "[...]\n";
   (* Run it in single-row mode. *)
@@ -194,11 +196,9 @@ let test (c : connection) ~fd =
 let main conninfo =
   (* Async connect and test. *)
   let c = new connection ~conninfo ~startonly:true () in
-
   (* quiet notice processing is necessary; otherwise you get segfaults!
      https://github.com/mmottl/postgresql-ocaml/pull/38/files *)
   c#set_notice_processing `Quiet;
-
   let%bind () =
     with_fd c#socket ~f:(fun fd ->
         let%bind () = finish_conn ~fd (fun () -> c#connect_poll) Polling_writing in
