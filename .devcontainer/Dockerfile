@@ -6,6 +6,6 @@ RUN apk add git inotify-tools openssh openssl-dev libffi-dev zlib-dev pcre neovi
 
 USER opam
 RUN opam update
-RUN opam install dune core async base merlin ocamlformat ppx_jane ocaml-lsp-server postgresql
+RUN opam install dune core async base merlin ocamlformat ppx_jane ocaml-lsp-server postgresql ocamlformat-rpc
 
 RUN mkdir -p ~/.cache/nvim
