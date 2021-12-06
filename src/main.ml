@@ -1,6 +1,6 @@
 open Core
 open Async
-open Postgresql
+module P = Postgresql
 
 let failwith_f fmt = ksprintf failwith fmt
 
@@ -27,7 +27,7 @@ let wait_for_result c ~fd =
   done
 ;;
 
-let fetch_result c ~fd =
+let fetch_result (c: P.connection) ~fd : P.result option Deferred.t =
   let%map () = wait_for_result c ~fd in
   c#get_result
 ;;
@@ -43,7 +43,7 @@ let fetch_single_result c ~fd =
 
 (* See http://www.postgresql.org/docs/devel/static/libpq-connect.html *)
 let rec finish_conn ~fd connect_poll = function
-  | Polling_failed ->
+  | P.Polling_failed ->
     printf "f\n%!";
     return ()
   | Polling_reading ->
@@ -59,7 +59,7 @@ let rec finish_conn ~fd connect_poll = function
     return ()
 ;;
 
-let test (c : connection) ~fd =
+let test (c : P.connection) ~fd =
   (* Create a table using a non-prepared statement. *)
   c#send_query
     {| 
@@ -195,7 +195,7 @@ let test (c : connection) ~fd =
 
 let main conninfo =
   (* Async connect and test. *)
-  let c = new connection ~conninfo ~startonly:true () in
+  let c = new P.connection ~conninfo ~startonly:true () in
   (* quiet notice processing is necessary; otherwise you get segfaults!
      https://github.com/mmottl/postgresql-ocaml/pull/38/files *)
   c#set_notice_processing `Quiet;
