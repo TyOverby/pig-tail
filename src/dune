@@ -1,0 +1,5 @@
+(executables
+ (names main)
+ (libraries async postgresql)
+ (preprocess
+  (pps ppx_jane)))
