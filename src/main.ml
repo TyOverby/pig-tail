@@ -226,8 +226,9 @@ let () =
   let command =
     let open Command.Let_syntax in
     let%map host = flag "-host" required_string ~doc:" hostname for database"
-    and user = flag "-user" required_string ~doc:" database username" in
-    let conninfo = sprintf "host=%s user=%s" host user in
+    and user = flag "-user" required_string ~doc:" database username" 
+    and port = flag "-port" required_string ~doc:" database port" in
+    let conninfo = sprintf "host=%s user=%s port=%s" host user port in
     fun () -> main conninfo
   in
   Command.run (Command.async ~summary:"Connect to pgsql" command)
