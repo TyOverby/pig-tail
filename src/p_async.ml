@@ -117,16 +117,13 @@ let fetch_iter t ~f =
               Deferred.Or_error.try_with (fun () ->
                   let open Deferred.Let_syntax in
                   while%bind
-                    let%bind res = fetch_result t in
-                    match res with
+                    match%map fetch_result t with
                     | Error e -> Error.raise e
-                    | Ok None -> return true
+                    | Ok None -> true
                     | Ok (Some res) ->
                       print_s [%message (Result.status res : Result_status.t)];
-                      return false
-                  do
-                    return ()
-                  done)
+                      false
+                  do return () done)
             in
             return (`Finished ())
           | `Continue -> return (`Repeat ()))))
