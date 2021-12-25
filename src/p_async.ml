@@ -168,11 +168,9 @@ let create ~host ~user ~port =
           let%bind () = finish_conn ~fd (fun () -> conn#connect_poll) Polling_writing in
           status_is_ok t)
     in
-    let%bind () =
-      Deferred.ok
-        (Async.Fd.close ~file_descriptor_handling:Do_not_close_file_descriptor fd)
-    in
-    return ()
+    fd
+    |> Async.Fd.close ~file_descriptor_handling:Do_not_close_file_descriptor
+    |> Deferred.ok
   in
   conn#set_notice_processing `Quiet;
   conn#set_nonblocking true;
