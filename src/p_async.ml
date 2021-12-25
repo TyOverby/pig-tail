@@ -145,14 +145,14 @@ let fetch_single_result ?stop t =
       Error (Error.of_string "more than one result returned from fetch_single_result"))
 ;;
 
-let rec finish_conn ~fd connect_poll = function
+let rec finish_conn ~fd f = function
   | P.Polling_failed -> return (Error (Error.of_string "polling failed"))
   | Polling_reading ->
     let%bind (_ : _) = Async.Fd.ready_to fd `Read in
-    finish_conn ~fd connect_poll (connect_poll ())
+    finish_conn ~fd f (f ())
   | Polling_writing ->
     let%bind (_ : _) = Async.Fd.ready_to fd `Write in
-    finish_conn ~fd connect_poll (connect_poll ())
+    finish_conn ~fd f (f ())
   | Polling_ok -> return (Ok ())
 ;;
 
@@ -160,6 +160,20 @@ let create ~host ~user ~port =
   let open Deferred.Or_error.Let_syntax in
   let conninfo = sprintf "host=%s user=%s port=%d" host user port in
   let conn = new P.connection ~conninfo ~startonly:true () in
+  let%bind () =
+    let fd = make_fd conn#socket in
+    let t = { conn; fd } in
+    let%bind () =
+      Deferred.Or_error.try_with_join (fun () ->
+          let%bind () = finish_conn ~fd (fun () -> conn#connect_poll) Polling_writing in
+          status_is_ok t)
+    in
+    let%bind () =
+      Deferred.ok
+        (Async.Fd.close ~file_descriptor_handling:Do_not_close_file_descriptor fd)
+    in
+    return ()
+  in
   conn#set_notice_processing `Quiet;
   conn#set_nonblocking true;
   assert conn#reset_start;
