@@ -16,9 +16,9 @@ module Result_status = struct
     | Single_tuple (** One tuple of a result set ({!set_single_row_mode}) *)
   [@@deriving sexp]
 
-  let is_ok = function
+  let is_ok f = function
     | Single_tuple | Tuples_ok | Command_ok -> Ok ()
-    | other -> Error (Error.create_s [%sexp (other : t)])
+    | other -> Error (Error.create_s [%sexp (other : t), (f () : string)])
   ;;
 end
 
@@ -28,7 +28,7 @@ module Result = struct
   type t = P.result
 
   let status (t : t) = t#status
-  let is_ok (t : t) = Result_status.is_ok t#status
+  let is_ok (t : t) = Result_status.is_ok (fun () -> t#error) t#status
   let nfields (t : t) = t#nfields
   let ntuples (t : t) = t#ntuples
   let get_value (t : t) i k = t#getvalue i k
@@ -123,7 +123,9 @@ let fetch_iter t ~f =
                     | Ok (Some res) ->
                       print_s [%message (Result.status res : Result_status.t)];
                       false
-                  do return () done)
+                  do
+                    return ()
+                  done)
             in
             return (`Finished ())
           | `Continue -> return (`Repeat ()))))

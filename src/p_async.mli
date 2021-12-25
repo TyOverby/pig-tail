@@ -4,8 +4,6 @@ open! Async
 module Result : sig
   module Status : sig
     type t [@@deriving sexp]
-
-    val is_ok : t -> unit Or_error.t
   end
 
   type t [@@deriving sexp_of]
