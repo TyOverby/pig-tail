@@ -72,9 +72,9 @@ let test t =
   c#send_describe_prepared "test_sel";
   let%bind r = Pa.fetch_single_result t in
   assert (Pa.Result.nfields r = 4);
-  assert (Poly.equal (Pa.Result.fname r 0) "id");
-  assert (Poly.equal (Pa.Result.fname r 1) "a");
-  assert (Poly.equal (Pa.Result.fname r 2) "b");
+  assert (String.equal (Pa.Result.fname r 0) "id");
+  assert (String.equal (Pa.Result.fname r 1) "a");
+  assert (String.equal (Pa.Result.fname r 2) "b");
   (* Run it. *)
   c#send_query_prepared "test_sel";
   let%bind r = Pa.fetch_single_result t in
@@ -92,31 +92,23 @@ let test t =
   printf "[...]\n";
   (* Run it in single-row mode. *)
   c#send_query_prepared "test_sel";
-  c#set_single_row_mode;
   let%bind () =
-    Deferred.Or_error.List.iter
-      (List.range ~stop:`inclusive 0 expected_ntuples)
-      ~how:`Sequential
-      ~f:(fun i ->
-        match%map Pa.fetch_result t with
-        | None -> ()
-        | Some r ->
-          if i < shown_ntuples
-          then
-            printf
-              "%s, %s, %s\n"
-              (Pa.Result.get_value r 0 0)
-              (Pa.Result.get_value r 0 1)
-              (Pa.Result.get_value r 0 2))
+    Pa.fetch_iteri t ~f:(fun i r ->
+        if i < shown_ntuples
+        then
+          printf
+            "%s, %s, %s\n"
+            (Pa.Result.get_value r 0 0)
+            (Pa.Result.get_value r 0 1)
+            (Pa.Result.get_value r 0 2);
+        return `Continue)
   in
   printf "[...]\n";
-  let%bind () =
-    match%map Pa.fetch_result t with
-    | None -> ()
-    | Some _ -> assert false
-  in
   (* Drop the main table. *)
-  c#send_query "DROP TABLE postgresql_ocaml_async CASCADE";
+  let%bind () =
+    Pa.try_with_join (fun () ->
+        return (c#send_query "DROP TABLE postgresql_ocaml_async CASCADE"))
+  in
   let%bind _ = Pa.fetch_single_result t in
   return ()
 ;;

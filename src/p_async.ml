@@ -47,6 +47,23 @@ module Result = struct
   ;;
 end
 
+let try_with f =
+  match%map Monitor.try_with (fun () -> f ()) with
+  | Error e ->
+    (match Monitor.extract_exn e with
+    | P.Error e ->
+      Error (Error.tag ~tag:"Postgresql.Error" (Error.of_string (P.string_of_error e)))
+    | e -> Error (Error.of_exn e))
+  | Ok v -> Ok v
+;;
+
+let try_with_join f =
+  match%map try_with f with
+  | Ok (Ok v) -> Ok v
+  | Ok (Error e) -> Error e
+  | Error e -> Error e
+;;
+
 type t =
   { conn : P.connection
   ; fd : Async.Fd.t
@@ -75,7 +92,7 @@ let status_is_ok { conn; _ } =
 ;;
 
 let wait_for_result { conn; fd } =
-  Deferred.Or_error.try_with (fun () ->
+  try_with (fun () ->
       conn#consume_input;
       while%bind return conn#is_busy do
         (* apparently there's an Async.Fd function that will call you back 
@@ -92,7 +109,7 @@ let fetch_result ?(stop = Deferred.never ()) ({ conn; _ } as t) =
   Async.upon stop (fun () -> conn#request_cancel);
   let%bind () = wait_for_result t in
   let%bind () = status_is_ok t in
-  match%bind Deferred.return (Or_error.try_with (fun () -> conn#get_result)) with
+  match%bind try_with (fun () -> Deferred.return conn#get_result) with
   | None -> return None
   | Some r ->
     (match Result.is_ok r with
@@ -107,14 +124,18 @@ let fetch_iter t ~f =
       match%bind fetch_result t with
       | None -> return (`Finished ())
       | Some r ->
+        let%bind.Deferred.Or_error () = Deferred.return (Result.is_ok r) in
         (match Result.status r with
-        | Result_status.Tuples_ok -> return (`Finished ())
+        | Result_status.Tuples_ok ->
+          let%map r' = fetch_result t in
+          assert (Option.is_none r');
+          `Finished ()
         | _ ->
           (match%bind f r with
           | `Stop ->
             t.conn#request_cancel;
             let%bind () =
-              Deferred.Or_error.try_with (fun () ->
+              try_with (fun () ->
                   let open Deferred.Let_syntax in
                   while%bind
                     match%map fetch_result t with
@@ -129,6 +150,14 @@ let fetch_iter t ~f =
             in
             return (`Finished ())
           | `Continue -> return (`Repeat ()))))
+;;
+
+let fetch_iteri t ~f =
+  let i = ref 0 in
+  fetch_iter t ~f:(fun r ->
+      let i' = !i in
+      incr i;
+      f i' r)
 ;;
 
 let fetch_single_result ?stop t =
@@ -163,7 +192,7 @@ let create ~host ~user ~port =
     let fd = make_fd conn#socket in
     let t = { conn; fd } in
     let%bind () =
-      Deferred.Or_error.try_with_join (fun () ->
+      try_with_join (fun () ->
           let%bind () = finish_conn ~fd (fun () -> conn#connect_poll) Polling_writing in
           status_is_ok t)
     in
@@ -177,7 +206,7 @@ let create ~host ~user ~port =
   let fd = make_fd conn#socket in
   let t = { conn; fd } in
   let%bind () =
-    Deferred.Or_error.try_with_join (fun () ->
+    try_with_join (fun () ->
         let%bind () = finish_conn ~fd (fun () -> conn#reset_poll) Polling_writing in
         status_is_ok t)
   in

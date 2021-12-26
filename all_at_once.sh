@@ -8,7 +8,7 @@ trap 'rm -rf "$DATA_DIR"' EXIT
 # Initialize and start database
 initdb --auth-host=trust --username=postgres "$DATA_DIR"
 pg_ctl -o "-p $PORT" -D "$DATA_DIR" -l "$DATA_DIR/logfile" start
-trap 'pg_ctl -o "-p $PORT" -D "$DATA_DIR" stop' EXIT
+trap 'pg_ctl -D "$DATA_DIR" stop' EXIT
 
 # Run ocaml
 dune exec ./src/main.exe -- -user postgres -host localhost -port "$PORT"
